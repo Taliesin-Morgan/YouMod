@@ -1,0 +1,61 @@
+{
+  "BuildMachineOSBuild" => "24H232"
+  "CFBundleDevelopmentRegion" => "en"
+  "CFBundleDisplayName" => "FairPlayed"
+  "CFBundleDocumentTypes" => [
+    0 => {
+      "CFBundleTypeName" => "iOS App Archive"
+      "CFBundleTypeRole" => "Viewer"
+      "LSHandlerRank" => "Alternate"
+      "LSItemContentTypes" => [
+        0 => "com.apple.itunes.ipa"
+        1 => "public.zip-archive"
+      ]
+    }
+  ]
+  "CFBundleExecutable" => "FairPlayed"
+  "CFBundleIdentifier" => "com.m0u.fairplayed"
+  "CFBundleInfoDictionaryVersion" => "6.0"
+  "CFBundleName" => "FairPlayed"
+  "CFBundlePackageType" => "APPL"
+  "CFBundleShortVersionString" => "0.1"
+  "CFBundleSupportedPlatforms" => [
+    0 => "iPhoneOS"
+  ]
+  "CFBundleVersion" => "1"
+  "DTCompiler" => "com.apple.compilers.llvm.clang.1_0"
+  "DTPlatformBuild" => "22F76"
+  "DTPlatformName" => "iphoneos"
+  "DTPlatformVersion" => "18.5"
+  "DTSDKBuild" => "22F76"
+  "DTSDKName" => "iphoneos18.5"
+  "DTXcode" => "1640"
+  "DTXcodeBuild" => "16F6"
+  "LSRequiresIPhoneOS" => 1
+  "LSSupportsOpeningDocumentsInPlace" => 0
+  "MinimumOSVersion" => "16.0"
+  "UIApplicationSceneManifest" => {
+    "UIApplicationSupportsMultipleScenes" => 0
+    "UISceneConfigurations" => {
+      "UIWindowSceneSessionRoleApplication" => [
+        0 => {
+          "UISceneConfigurationName" => "Default"
+          "UISceneDelegateClassName" => "SceneDelegate"
+        }
+      ]
+    }
+  }
+  "UIDeviceFamily" => [
+    0 => 1
+    1 => 2
+  ]
+  "UIFileSharingEnabled" => 1
+  "UILaunchScreen" => {
+  }
+  "UIRequiredDeviceCapabilities" => [
+    0 => "arm64"
+  ]
+  "UISupportedInterfaceOrientations" => [
+    0 => "UIInterfaceOrientationPortrait"
+  ]
+}
