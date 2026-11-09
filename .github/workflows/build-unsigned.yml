@@ -6,8 +6,13 @@ on:
 permissions:
   contents: write
 jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "actions-ok $(uname -a)"
   build:
-    runs-on: macos-14
+    needs: probe
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - name: Checkout CI repo
