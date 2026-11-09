@@ -1,0 +1,110 @@
+name: Build unsigned FairPlayed.app
+on:
+  push:
+    branches: [fairplayed-ci]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout CI repo
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned FairPlayed
+        uses: actions/checkout@v4
+        with:
+          repository: morzelowski/FairPlayed
+          ref: bad7df138839b5e0ac8b9f20cc4689140b8436fb
+          path: FairPlayed
+
+      - name: Show Xcode
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Ensure empty payload (no licensed content)
+        run: |
+          mkdir -p FairPlayed/FairPlayed/payload
+          # intentionally empty — YouTube must never enter CI
+
+      - name: Build unsigned iphoneos
+        working-directory: FairPlayed/FairPlayed
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project FairPlayed.xcodeproj \
+            -scheme FairPlayed \
+            -configuration Debug \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build | tee build.log
+          APP="build/Build/Products/Debug-iphoneos/FairPlayed.app"
+          test -d "$APP"
+          test -x "$APP/FairPlayed"
+          /usr/bin/file "$APP/FairPlayed"
+          /usr/bin/plutil -p "$APP/Info.plist" | tee app-info.txt
+          lipo -info "$APP/FairPlayed" || true
+          # No EmbeddedPayload YouTube
+          if [ -d "$APP/EmbeddedPayload" ]; then
+            echo "EmbeddedPayload contents:"; ls -la "$APP/EmbeddedPayload" || true
+            if find "$APP/EmbeddedPayload" -iname '*youtube*' | grep -q .; then
+              echo "REFUSING: YouTube content in CI artifact" >&2
+              exit 1
+            fi
+          fi
+
+      - name: Package helper artifact
+        working-directory: FairPlayed/FairPlayed
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Debug-iphoneos/FairPlayed.app"
+          mkdir -p dist
+          ditto "$APP" dist/FairPlayed.app
+          # strip any empty EmbeddedPayload noise
+          rm -rf dist/FairPlayed.app/EmbeddedPayload
+          (cd dist && zip -qry ../FairPlayed-unsigned-helper.zip FairPlayed.app)
+          shasum -a 256 ../FairPlayed-unsigned-helper.zip | tee ../helper.sha256
+          ls -lh ../FairPlayed-unsigned-helper.zip
+          # Capture runner metadata for local DONE report
+          {
+            echo "runner=$(uname -a)"
+            xcodebuild -version
+            xcrun --sdk iphoneos --show-sdk-version
+          } > ../build-meta.txt
+
+      - name: Publish unsigned helper to ci-artifacts branch (SSH-retrievable)
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          WORK=$(mktemp -d)
+          cp FairPlayed/FairPlayed-unsigned-helper.zip "$WORK/"
+          cp FairPlayed/helper.sha256 "$WORK/"
+          cp FairPlayed/FairPlayed/app-info.txt "$WORK/"
+          cp FairPlayed/build-meta.txt "$WORK/"
+          cd "$WORK"
+          git init -q
+          git checkout -q -b ci-artifacts
+          git add FairPlayed-unsigned-helper.zip helper.sha256 app-info.txt build-meta.txt
+          git commit -q -m "ci: unsigned FairPlayed.app @ bad7df138839b5e0ac8b9f20cc4689140b8436fb"
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -f origin ci-artifacts
+
+      - name: Upload Actions artifact (short retention; optional if API available)
+        uses: actions/upload-artifact@v4
+        with:
+          name: FairPlayed-unsigned-helper
+          path: |
+            FairPlayed/FairPlayed-unsigned-helper.zip
+            FairPlayed/helper.sha256
+            FairPlayed/FairPlayed/app-info.txt
+            FairPlayed/build-meta.txt
+          retention-days: 3
+          if-no-files-found: error
