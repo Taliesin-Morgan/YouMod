@@ -5,10 +5,13 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: fairplayed-unsigned
+  cancel-in-progress: true
 jobs:
   build:
-    runs-on: macos-15
-    timeout-minutes: 30
+    runs-on: macos-14
+    timeout-minutes: 45
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
