@@ -5,17 +5,16 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-15, macos-14, macos-13]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - name: Checkout CI repo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Checkout pinned FairPlayed
         uses: actions/checkout@v4
@@ -26,7 +25,6 @@ jobs:
 
       - name: Show Xcode
         run: |
-          echo "matrix_os=${{ matrix.os }}"
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
@@ -77,38 +75,18 @@ jobs:
           (cd dist && zip -qry "$OUT_ZIP" FairPlayed.app)
           shasum -a 256 "$OUT_ZIP" | tee "${GITHUB_WORKSPACE}/helper.sha256"
           {
-            echo "matrix_os=${{ matrix.os }}"
             echo "runner=$(uname -a)"
             xcodebuild -version
             echo -n "iphoneos_sdk="
             xcrun --sdk iphoneos --show-sdk-version
           } | tee "${GITHUB_WORKSPACE}/build-meta.txt"
           ls -lh "$OUT_ZIP"
-
-      - name: Publish unsigned helper to ci-artifacts branch (SSH-retrievable)
-        run: |
-          set -euo pipefail
-          test -f FairPlayed-unsigned-helper.zip
-          test -f helper.sha256
-          test -f app-info.txt
-          test -f build-meta.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          WORK=$(mktemp -d)
-          cp FairPlayed-unsigned-helper.zip helper.sha256 app-info.txt build-meta.txt "$WORK/"
-          cd "$WORK"
-          git init -q
-          git checkout -q -b ci-artifacts
-          git add FairPlayed-unsigned-helper.zip helper.sha256 app-info.txt build-meta.txt
-          git commit -q -m "ci: unsigned FairPlayed.app @ bad7df138839b5e0ac8b9f20cc4689140b8436fb (${{ matrix.os }})"
-          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          # First successful matrix leg wins; later legs may fail force-push race — tolerate that
-          git push -f origin ci-artifacts
+          unzip -l "$OUT_ZIP" | head
 
       - name: Upload Actions artifact (short retention)
         uses: actions/upload-artifact@v4
         with:
-          name: FairPlayed-unsigned-helper-${{ matrix.os }}
+          name: FairPlayed-unsigned-helper
           path: |
             FairPlayed-unsigned-helper.zip
             helper.sha256
@@ -116,3 +94,29 @@ jobs:
             build-meta.txt
           retention-days: 3
           if-no-files-found: error
+
+      - name: Publish unsigned helper to ci-artifacts branch (SSH-retrievable)
+        continue-on-error: true
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -f FairPlayed-unsigned-helper.zip
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          WORK=$(mktemp -d)
+          cp FairPlayed-unsigned-helper.zip helper.sha256 app-info.txt build-meta.txt "$WORK/"
+          cd "$WORK"
+          git init -q
+          git checkout -q -b ci-artifacts
+          git add FairPlayed-unsigned-helper.zip helper.sha256 app-info.txt build-meta.txt
+          git commit -q -m "ci: unsigned FairPlayed.app @ bad7df138839b5e0ac8b9f20cc4689140b8436fb"
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          set +e
+          git push -f origin ci-artifacts 2>&1 | tee "${GITHUB_WORKSPACE}/publish.log"
+          rc=${PIPESTATUS[0]}
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            echo "publish_failed rc=$rc (likely repo Workflow permissions are read-only)" >&2
+            exit "$rc"
+          fi
