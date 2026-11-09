@@ -49,7 +49,7 @@ jobs:
           test -d "$APP"
           test -x "$APP/FairPlayed"
           /usr/bin/file "$APP/FairPlayed"
-          /usr/bin/plutil -p "$APP/Info.plist" | tee app-info.txt
+          /usr/bin/plutil -p "$APP/Info.plist" | tee "${GITHUB_WORKSPACE}/app-info.txt"
           lipo -info "$APP/FairPlayed" || true
           # No EmbeddedPayload YouTube
           if [ -d "$APP/EmbeddedPayload" ]; then
@@ -65,30 +65,32 @@ jobs:
         run: |
           set -euo pipefail
           APP="build/Build/Products/Debug-iphoneos/FairPlayed.app"
+          OUT_ZIP="${GITHUB_WORKSPACE}/FairPlayed-unsigned-helper.zip"
+          rm -rf dist
           mkdir -p dist
           ditto "$APP" dist/FairPlayed.app
-          # strip any empty EmbeddedPayload noise
           rm -rf dist/FairPlayed.app/EmbeddedPayload
-          (cd dist && zip -qry ../FairPlayed-unsigned-helper.zip FairPlayed.app)
-          shasum -a 256 ../FairPlayed-unsigned-helper.zip | tee ../helper.sha256
-          ls -lh ../FairPlayed-unsigned-helper.zip
-          # Capture runner metadata for local DONE report
+          (cd dist && zip -qry "$OUT_ZIP" FairPlayed.app)
+          shasum -a 256 "$OUT_ZIP" | tee "${GITHUB_WORKSPACE}/helper.sha256"
           {
             echo "runner=$(uname -a)"
             xcodebuild -version
+            echo -n "iphoneos_sdk="
             xcrun --sdk iphoneos --show-sdk-version
-          } > ../build-meta.txt
+          } | tee "${GITHUB_WORKSPACE}/build-meta.txt"
+          ls -lh "$OUT_ZIP"
 
       - name: Publish unsigned helper to ci-artifacts branch (SSH-retrievable)
         run: |
           set -euo pipefail
+          test -f FairPlayed-unsigned-helper.zip
+          test -f helper.sha256
+          test -f app-info.txt
+          test -f build-meta.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           WORK=$(mktemp -d)
-          cp FairPlayed/FairPlayed-unsigned-helper.zip "$WORK/"
-          cp FairPlayed/helper.sha256 "$WORK/"
-          cp FairPlayed/FairPlayed/app-info.txt "$WORK/"
-          cp FairPlayed/build-meta.txt "$WORK/"
+          cp FairPlayed-unsigned-helper.zip helper.sha256 app-info.txt build-meta.txt "$WORK/"
           cd "$WORK"
           git init -q
           git checkout -q -b ci-artifacts
@@ -97,14 +99,14 @@ jobs:
           git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push -f origin ci-artifacts
 
-      - name: Upload Actions artifact (short retention; optional if API available)
+      - name: Upload Actions artifact (short retention)
         uses: actions/upload-artifact@v4
         with:
           name: FairPlayed-unsigned-helper
           path: |
-            FairPlayed/FairPlayed-unsigned-helper.zip
-            FairPlayed/helper.sha256
-            FairPlayed/FairPlayed/app-info.txt
-            FairPlayed/build-meta.txt
+            FairPlayed-unsigned-helper.zip
+            helper.sha256
+            app-info.txt
+            build-meta.txt
           retention-days: 3
           if-no-files-found: error
